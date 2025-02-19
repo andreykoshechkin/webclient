@@ -1,0 +1,24 @@
+webClient.post()  // Создание POST-запроса.
+    .uri("/api/deposit")  // Указание URI для запроса.
+    .doOnRequest((request, next) -> log.info("Отправка запроса: {} {}", request.method(), request.url()))  // Логируем начало отправки запроса.
+    .bodyValue(request)  // Добавление тела запроса.
+    .retrieve()  // Выполнение запроса и получение ответа.
+    .onStatus(HttpStatus::isError, response ->  // Обработка ошибок при получении ответа с ошибкой.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализация тела ошибки в объект DepositErrorResponse.
+                .doOnTerminate(() -> log.error("Ошибка при обработке депозита"))  // Логируем ошибку при завершении.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразование ошибки в исключение DepositException.
+    )
+    .doOnSuccess(response -> log.info("Запрос выполнен успешно: {}", response))  // Логируем успешное выполнение запроса.
+    .bodyToMono(DepositResponse.class)  // Десериализация успешного ответа в объект DepositResponse.
+    .doOnTerminate(() -> log.info("Запрос завершен."))  // Логируем завершение запроса (независимо от того, успешный он или нет).
+    .timeout(Duration.ofSeconds(5))  // Таймаут запроса через 5 секунд.
+    .retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(2)))  // Повторная попытка через 2 секунды, максимум 3 раза.
+    .onErrorResume(e -> {  // Обработка ошибок, таких как тайм-ауты.
+        if (e instanceof TimeoutException) {
+            log.error("Тайм-аут при выполнении запроса: {}", e.getMessage());  // Логируем тайм-аут.
+        } else {
+            log.error("Ошибка при выполнении запроса: {}", e.getMessage());  // Логируем другие ошибки.
+        }
+        return Mono.empty();  // Можно вернуть пустой Mono, или любой другой объект, если нужно продолжить выполнение.
+    })
+    .block();  // Ожидание выполнения запроса.
