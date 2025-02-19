@@ -1,0 +1,38 @@
+public DepositResponse executeRequest(DepositRequest depositRequest) {
+    return Try.of(() -> {
+        return webClient.post()
+                .uri("/deposit")
+                .bodyValue(depositRequest)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response ->
+                        response.bodyToMono(DepositErrorResponse.class)
+                                .doOnNext(errorResponse -> 
+                                    log.error("Ошибка от внешнего сервиса при обработке депозита. Код: {}, Сообщение: {}", 
+                                              errorResponse.getErrorCode(), errorResponse.getMessage())
+                                )
+                                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))
+                )
+                .bodyToMono(DepositResponse.class)
+                .timeout(Duration.ofSeconds(5))
+                .doOnError(error -> {
+                    if (error instanceof TimeoutException) {
+                        log.error("Таймаут при выполнении запроса к внешнему сервису /deposit");
+                    } else {
+                        log.error("Ошибка при выполнении запроса в WebClient: {}", error.toString(), error);
+                    }
+                })
+                .block();
+    })
+    .onSuccess(success -> {
+        log.info("Запрос успешно выполнен: {}", success);
+        service.sendMessage("Запрос успешно создан");
+    })
+    .onFailure(DepositException.class, error -> {
+        service.sendMessage("Не удалось создать заявку");
+    })
+    .onFailure(Throwable.class, error -> {
+        log.error("Критическая ошибка при выполнении запроса: {}", error.toString(), error);
+        service.sendMessage("Произошла ошибка при создании заявки");
+    })
+    .getOrElseThrow(error -> new RuntimeException("Ошибка при выполнении запроса", error));
+}
