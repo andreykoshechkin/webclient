@@ -1,3 +1,15 @@
+webClient.post()
+                .uri("/api/deposit")
+                .bodyValue(request)
+                .retrieve()
+                .onStatus(HttpStatus::isError, response -> 
+                    response.bodyToMono(DepositErrorResponse.class)  
+                            .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))
+                )
+                .bodyToMono(DepositResponse.class)  
+                .block()
+
+
 1. webClient.post()
 Этот вызов инициирует HTTP POST-запрос с использованием WebClient, который является асинхронным и не блокирующим клиентом для работы 
 с HTTP в Spring. Это означает, что запрос отправляется асинхронно, и при этом не блокирует текущий поток исполнения. Однако, позже вызов .block() заставит код ждать завершения ответа.
