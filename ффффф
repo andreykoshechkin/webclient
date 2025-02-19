@@ -1,0 +1,50 @@
+import javax.validation.Validation;
+import javax.validation.Validator;
+import javax.validation.ValidatorFactory;
+import javax.validation.ConstraintViolation;
+import java.util.Set;
+
+public class DepositRequestValidator {
+
+    public static void validateRequest(DepositRequest depositRequest) {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
+        
+        Set<ConstraintViolation<DepositRequest>> violations = validator.validate(depositRequest);
+        if (!violations.isEmpty()) {
+            throw new IllegalArgumentException("Invalid deposit request: " + violations);
+        }
+    }
+}
+Затем вы можете вызвать эту валидацию перед отправкой запроса:
+
+java
+Копировать
+Редактировать
+public DepositResponse executeRequest(DepositRequest depositRequest) {
+    DepositRequestValidator.validateRequest(depositRequest);
+
+    return Try.of(() -> 
+            webClient.post()
+                .uri("/deposit")
+                .bodyValue(depositRequest)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response -> 
+                        response.bodyToMono(DepositErrorResponse.class)
+                            .doOnNext(errorResponse -> log.error("Error creating deposit request. Code: {}, Message: {}", 
+                                errorResponse.getError(), errorResponse.getMessage()))
+                            .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))
+                    )
+                .bodyToMono(DepositResponse.class)
+                .block()
+        )
+        .onSuccess(success -> {
+            log.info("Deposit request successfully created: {}", success);
+            service.sendMessage("Request successfully created");
+        })
+        .onFailure(DepositException.class, error -> {
+            log.error("Failed to create deposit request: {}", error.getMessage());
+            service.sendMessage("Failed to create request");
+        })
+        .get();
+}
