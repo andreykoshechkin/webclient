@@ -1,0 +1,9 @@
+webClient.get()
+         .uri(uriBuilder -> uriBuilder
+             .path("/api/deposit")
+             .queryParam("page", 1)
+             .queryParam("size", 20)
+             .build())
+         .retrieve()
+         .bodyToMono(DepositResponse.class)
+         .block();
