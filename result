@@ -1,0 +1,23 @@
+public DepositResponse executeRequest(DepositRequest depositRequest) {
+    return Try.of(() ->
+            webClient.post()
+                    .uri("/deposit")
+                    .bodyValue(depositRequest)  // Passing the request object, not its class
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, response ->  // Handling errors when the response is an error
+                            response.bodyToMono(DepositErrorResponse.class)  // Deserialize the error body
+                                    .doOnNext(errorResponse -> log.error("Error from [ServiceName] when creating deposit request. Code: {}, Message: {}, Response: {}",
+                                            errorResponse.getError(), errorResponse.getMessage(), errorResponse))  // Log error details
+                                    .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Convert the error into an exception
+                    )
+                    .bodyToMono(DepositResponse.class)
+                    .doOnTerminate(() -> log.debug("Deposit request creation process finished"))  // Log when the request is finished
+                    .block()
+    ).onSuccess(success -> {
+        log.info("Deposit request creation in [ServiceName] was successful. Response: {}", success);  // Log the successful response
+        service.sendMessage("Request successfully created");
+    }).onFailure(DepositException.class, error -> {
+        log.error("Failed to create deposit request. Error: {}", error.getMessage(), error);  // Log the error with the full stack trace
+        service.sendMessage("Failed to create the request");
+    }).get();  // If nothing is returned, throw an exception
+}
