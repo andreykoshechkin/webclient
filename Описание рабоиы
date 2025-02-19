@@ -1,0 +1,165 @@
+1. Добавление заголовков в запрос
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI, по которому делаем запрос (в данном случае /api/deposit).
+    .headers(headers -> headers.set("Authorization", "Bearer " + token))  // Добавляем заголовок Authorization с токеном для авторизации.
+    .bodyValue(request)  // Добавляем тело запроса (request - это объект, который будет сериализован в тело).
+    .retrieve()  // Отправляем запрос и начинаем обработку ответа.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ответа является ошибочным (например, 4xx или 5xx), выполняем логику.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки в объект DepositErrorResponse.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение DepositException.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ в объект DepositResponse.
+    .block();  // Блокируем выполнение и ждем ответа от сервера (в синхронном режиме).
+2. Обработка ошибок с дополнительной логикой
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос и начинаем обработку ответа.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки (например, 4xx или 5xx), выполняем следующую логику.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки в объект DepositErrorResponse.
+                .doOnTerminate(() -> log.error("Ошибка при обработке депозита"))  // Логируем ошибку перед завершением.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение DepositException.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ в объект DepositResponse.
+    .block();  // Блокируем выполнение и ждем ответа.
+3. Отправка данных с multipart (например, для загрузки файлов)
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .contentType(MediaType.MULTIPART_FORM_DATA)  // Устанавливаем тип контента как multipart/form-data (для отправки файлов).
+    .body(BodyInserters.fromMultipartData("file", new FileSystemResource("path/to/file.txt")))  // Отправляем файл через multipart.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос и начинаем обработку ответа.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем логику обработки.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .block();  // Блокируем выполнение и ждем ответа.
+4. Передача параметров через URI (параметры запроса)
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri(uriBuilder -> uriBuilder  // Используем UriBuilder для построения URI с параметрами.
+        .path("/api/deposit")  // Указываем путь.
+        .queryParam("accountId", "12345")  // Добавляем параметр accountId в запрос.
+        .queryParam("amount", "1000")  // Добавляем параметр amount в запрос.
+        .build())  // Строим конечный URI.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос и начинаем обработку ответа.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем логику обработки.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .block();  // Блокируем выполнение и ждем ответа.
+5. Настройка таймаутов для запроса
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем обработку.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .timeout(Duration.ofSeconds(5))  // Устанавливаем таймаут на 5 секунд для запроса.
+    .block();  // Блокируем выполнение и ждем ответа.
+6. Обработка данных с помощью фильтров
+java
+Копировать
+Редактировать
+WebClient.builder()  // Создаем WebClient с фильтром для дополнительной обработки запросов.
+    .baseUrl("https://api.example.com")  // Устанавливаем базовый URL.
+    .filter((request, next) -> {  // Добавляем фильтр для логирования запросов и ответов.
+        log.info("Отправка запроса: {}", request);  // Логируем отправку запроса.
+        return next.exchange(request)  // Делаем запрос через next фильтр.
+            .doOnTerminate(() -> log.info("Ответ получен"));  // Логируем завершение обработки ответа.
+    })
+    .build()
+    .post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос и начинаем обработку ответа.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем обработку.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .block();  // Блокируем выполнение и ждем ответа.
+7. Использование подписки для асинхронной обработки
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем обработку.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .doOnTerminate(() -> log.info("Запрос завершен"))  // Логируем завершение запроса.
+    .subscribe(response -> processResponse(response),  // Асинхронно подписываемся на успешный ответ.
+               error -> log.error("Произошла ошибка", error));  // Обрабатываем ошибку асинхронно.
+8. Добавление данных в теле запроса
+java
+Копировать
+Редактировать
+MultiValueMap<String, String> map = new LinkedMultiValueMap<>();  // Создаем коллекцию для передачи данных через форму.
+map.add("key1", "value1");  // Добавляем параметр key1=value1.
+map.add("key2", "value2");  // Добавляем параметр key2=value2.
+
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .body(BodyInserters.fromFormData(map))  // Отправляем данные как form-data.
+    .retrieve()  // Отправляем запрос и начинаем обработку ответа.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем обработку.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .block();  // Блокируем выполнение и ждем ответа.
+9. Повторные попытки (Retry)
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем обработку.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .retry(3)  // Если ошибка, повторяем запрос 3 раза.
+    .block();  // Блокируем выполнение и ждем ответа.
+10. Задержка между попытками (Retry with delay)
+java
+Копировать
+Редактировать
+webClient.post()  // Отправляем POST-запрос.
+    .uri("/api/deposit")  // Указываем URI запроса.
+    .bodyValue(request)  // Добавляем тело запроса.
+    .retrieve()  // Отправляем запрос.
+    .onStatus(HttpStatus::isError, response ->  // Если статус ошибки, выполняем обработку.
+        response.bodyToMono(DepositErrorResponse.class)  // Десериализуем тело ошибки.
+                .flatMap(errorResponse -> Mono.error(new DepositException(errorResponse)))  // Преобразуем ошибку в исключение.
+    )
+    .bodyToMono(DepositResponse.class)  // Десериализуем успешный ответ.
+    .retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(2)))  // Повторяем запрос 3 раза с задержкой 2 секунды.
+    .block();  // Блокируем выполнение и ждем ответа.
